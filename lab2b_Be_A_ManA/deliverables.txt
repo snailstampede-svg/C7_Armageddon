@@ -1,0 +1,375 @@
+lab2b_be_a_man steps
+
+1. upsate python flask app in user_data.sh to include /api/public-feed and  /api/list
+2. build golden ami (ami-062e40398c7a9d4aa) to include dnf and pip install stuff?
+3. update variables.tf to new ami above.
+4. new user_data-1.sh file 
+#####################################
+
+#!/bin/bash
+# Note: In a Golden AMI, the dnf/pip commands below would already be baked in.
+# This script would then only focus on the file creation and service start.
+
+mkdir -p /opt/rdsapp
+cat >/opt/rdsapp/app.py <<'PY'
+import json
+import os
+import boto3
+import pymysql
+from flask import Flask, request, make_response
+from datetime import datetime
+
+REGION = os.environ.get("AWS_REGION", "us-east-1")
+SECRET_ID = os.environ.get("SECRET_ID", "lab/rds/mysql")
+
+secrets = boto3.client("secretsmanager", region_name=REGION)
+
+def get_db_creds():
+    resp = secrets.get_secret_value(SecretId=SECRET_ID)
+    return json.loads(resp["SecretString"])
+
+def get_conn():
+    c = get_db_creds()
+    return pymysql.connect(
+        host=c["host"], 
+        user=c["username"], 
+        password=c["password"], 
+        port=int(c.get("port", 3306)), 
+        database=c.get("dbname", "labdb"), 
+        autocommit=True
+    )
+
+app = Flask(__name__)
+
+# --- HONORS ENDPOINT: PUBLIC FEED (Cacheable) ---
+@app.route("/api/public-feed")
+def public_feed():
+    data = {
+        "server_time_utc": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        "message_of_the_minute": "Keep your VPC hardened and your cache warm."
+    }
+    resp = make_response(json.dumps(data))
+    # Honors Requirement: s-maxage=30 tells CloudFront to cache for 30s
+    resp.headers['Cache-Control'] = 'public, s-maxage=30, max-age=0'
+    resp.headers['Content-Type'] = 'application/json'
+    return resp
+
+# --- HONORS ENDPOINT: PRIVATE LIST (Non-Cacheable) ---
+@app.route("/api/list")
+def list_notes():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id, note FROM notes ORDER BY id DESC;")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    out = "<h3>Notes</h3><ul>"
+    for r in rows:
+        out += f"<li>{r[0]}: {r[1]}</li>"
+    out += "</ul>"
+    
+    resp = make_response(out)
+    # Honors Requirement: private, no-store prevents CloudFront from caching
+    resp.headers['Cache-Control'] = 'private, no-store'
+    return resp
+
+# Standard /init and /add endpoints remain the same...
+@app.route("/init")
+def init_db():
+    c = get_db_creds()
+    conn = pymysql.connect(host=c["host"], user=c["username"], password=c["password"], port=int(c.get("port", 3306)), autocommit=True)
+    cur = conn.cursor()
+    cur.execute("CREATE DATABASE IF NOT EXISTS labdb;")
+    cur.execute("USE labdb;")
+    cur.execute("CREATE TABLE IF NOT EXISTS notes (id INT AUTO_INCREMENT PRIMARY KEY, note VARCHAR(255) NOT NULL);")
+    cur.close()
+    conn.close()
+    return "Initialized."
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=80)
+PY
+
+# systemd service remains the same as your original 1a_user_data.sh
+cat >/etc/systemd/system/rdsapp.service <<'SERVICE'
+[Unit]
+Description=EC2 to RDS Notes App
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/rdsapp
+Environment=SECRET_ID=lab/rds/mysql
+ExecStart=/usr/bin/python3 /opt/rdsapp/app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable rdsapp
+systemctl start rdsapp
+
+
+######################
+Terraform: Honors Overlay
+1) Reference AWS managed policies (data sources)
+
+Use Terraform data sources to grab managed cache policies by name. HashiCorp documents the data source pattern. 
+Terraform Registry
+
+Create lab2b_honors_origin_driven.tf:
+
+
+1- Added data sources to top of lab2_cloudfront_alb.tf file- 1to 23
+
+
+###
+2) Patch CloudFront behaviors (the Honors behavior matrix)
+A) /api/public-feed = origin-driven caching
+
+Use UseOriginCacheControlHeaders (or QueryStrings variant if needed).
+2- Added ordered cache behavior blocks to cloudfront_alb.tf directly below /static/* block
+
+###
+Honors Verification (students must prove origin-driven caching)
+1) Prove CloudFront is honoring origin Cache-Control
+A) First request should be MISS
+
+curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'
+
+Check headers:
+    Cache-Control: public, s-maxage=30, max-age=0 (from origin)
+    x-cache: Miss from cloudfront (or similar)
+    Age: likely absent or 0
+
+x-cache meanings are documented by AWS
+
+
+###
+
+morris@Mamba:~$ curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    65  100    65    0     0    101      0 --:--:-- --:--:-- --:--:--   101
+HTTP/2 200 
+content-type: application/json
+content-length: 65
+date: Tue, 10 Mar 2026 00:28:46 GMT
+cache-control: public, s-maxage=30, max-age=0
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Miss from cloudfront
+via: 1.1 4e4a0988d483279adcf39bb6548346a6.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: yFHkNTwdE20StP4g3XGJx3xCz08LK-u0st4N_fg7PL9qGMputohbAg==
+
+{"server_time_utc": "2026-03-10 00:28:46", "source": "Automated"}
+
+---
+1-a-first-request-miss.jpg
+---
+###
+
+B) Second request within 30 seconds should be HIT
+
+curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'
+sleep 5
+curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'
+
+Expected:
+    x-cache: Hit from cloudfront 
+    Age: increases on subsequent hits (cache indicator)
+    Body should remain identical until TTL expires
+
+curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo; sleep 5; curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo
+
+###
+
+morris@Mamba:~$ curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo; sleep 5; curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    65  100    65    0     0     88      0 --:--:-- --:--:-- --:--:--    88
+HTTP/2 200 
+content-type: application/json
+content-length: 65
+date: Tue, 10 Mar 2026 01:14:50 GMT
+cache-control: public, s-maxage=30, max-age=0
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Miss from cloudfront
+via: 1.1 1c4d129deb2211304c934a250596192c.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: EMQVNJ94cn0pN78prTeKcnO0uax8sBJ78sqRd1XN3HFlphSIcniIfQ==
+
+{"server_time_utc": "2026-03-10 01:14:50", "source": "Automated"}
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    65  100    65    0     0    985      0 --:--:-- --:--:-- --:--:--  1000
+HTTP/2 200 
+content-type: application/json
+content-length: 65
+date: Tue, 10 Mar 2026 01:14:50 GMT
+cache-control: public, s-maxage=30, max-age=0
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Hit from cloudfront
+via: 1.1 f38dffa5f68963b42a7e9d52afc9ea08.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: CmTfg0PWqfzAHMce8RSN9Kq-pP_dITV4JmtdBOk7pVnXAZyx7FAwMg==
+age: 5
+
+{"server_time_utc": "2026-03-10 01:14:50", "source": "Automated"}
+---
+1-b-second_request_hit.jpg
+---
+C) After 35 seconds, it should MISS again
+
+curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo; sleep 5; curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo; sleep 35; echo; curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo
+
+Expected:
+    x-cache becomes Miss or RefreshHit
+    Body updates
+---
+morris@Mamba:~$ curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo; sleep 5; curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo; sleep 35; echo; curl -i https://snailtek.click/api/public-feed | sed -n '1,20p'; echo
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    65  100    65    0     0     90      0 --:--:-- --:--:-- --:--:--    90
+HTTP/2 200 
+content-type: application/json
+content-length: 65
+date: Tue, 10 Mar 2026 01:28:37 GMT
+cache-control: public, s-maxage=30, max-age=0
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Miss from cloudfront
+via: 1.1 caaeba2a924bc96d1c9587af9daa3d38.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: LQVYk-4GAgEPO0dFeqRQjA0E8W4FulC7rhiIjG5qiPIwNlyMqs1ShA==
+
+{"server_time_utc": "2026-03-10 01:28:37", "source": "Automated"}
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    65  100    65    0     0   1071      0 --:--:-- --:--:-- --:--:--  1083
+HTTP/2 200 
+content-type: application/json
+content-length: 65
+date: Tue, 10 Mar 2026 01:28:37 GMT
+cache-control: public, s-maxage=30, max-age=0
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Hit from cloudfront
+via: 1.1 51df84e38810d5ccc0fa274af9609532.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: gN0o3pP6lqMM21h5Mg1dGqNmKGKo6UkbfjCb-KMZZWVKYcCTGK5T8w==
+age: 5
+
+{"server_time_utc": "2026-03-10 01:28:37", "source": "Automated"}
+
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    65  100    65    0     0     96      0 --:--:-- --:--:-- --:--:--    96
+HTTP/2 200 
+content-type: application/json
+content-length: 65
+date: Tue, 10 Mar 2026 01:29:18 GMT
+cache-control: public, s-maxage=30, max-age=0
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Miss from cloudfront
+via: 1.1 663bb84d90dc678d22cfa3b5a0fbd7ac.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: Cz_7UOSqmBWCnjyfI4DQz42Cy2K5IkP8wzSwK64DrnvdSqJQDGfWaA==
+
+{"server_time_utc": "2026-03-10 01:29:18", "source": "Automated"}
+
+---
+1c-miss-hit-miss.jpg
+---
+2) Prove “no-store” never caches (safety proof)
+
+    curl -i https://chewbacca-growl.com/api/list | sed -n '1,30p'
+    curl -i https://chewbacca-growl.com/api/list | sed -n '1,30p'
+
+Expected:
+    Cache-Control: private, no-store
+    No meaningful cache hit behavior (Age not growing / no Hit)
+    Each request should reflect origin state
+If a student gets a cache HIT here, it’s a fail (potential data leak).
+
+---
+
+curl -i https://snailtek.click/api/list | sed -n '1,30p'
+curl -i https://snailtek.click/api/list | sed -n '1,30p'
+---
+morris@Mamba:~$ curl -i https://snailtek.click/api/list; echo
+HTTP/2 200 
+content-type: text/html; charset=utf-8
+content-length: 34
+date: Tue, 10 Mar 2026 02:11:58 GMT
+cache-control: private, no-store
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Miss from cloudfront
+via: 1.1 f11576d31938be10fbf6eaf4d14172da.cloudfront.net (CloudFront)
+x-amz-cf-pop: LAX50-P3
+x-amz-cf-id: TXdXh-BVVPXiu2iDULVLuZkZlqz-ugwejbyBzhhcpgirvKyvc5RFUQ==
+
+<h3>Private Data - Notes List</h3>
+morris@Mamba:~$ curl -i https://snailtek.click/api/list; echo
+HTTP/2 200 
+content-type: text/html; charset=utf-8
+content-length: 34
+date: Tue, 10 Mar 2026 02:12:00 GMT
+cache-control: private, no-store
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Miss from cloudfront
+via: 1.1 9be2516f259db4923b89b59f0abe8c36.cloudfront.net (CloudFront)
+x-amz-cf-pop: LAX50-P3
+x-amz-cf-id: GnUpYsZ8JLSvaMnkaQVxHnNEZlGGCeAYaKyhPgKbU1Y1RKgdCJqKhQ==
+
+<h3>Private Data - Notes List</h3>
+---
+2-no-store.jpg
+---
+
+
+##################################
+#### Required Submissions ########
+##################################
+
+1. 
+Changed from: 
+ ordered_cache_behavior {
+    path_pattern           = "/static/*"
+    target_origin_id       = "${var.project_name}-alb-origin01"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id            = aws_cloudfront_cache_policy.lab_1c_cache_static01.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.lab_1c_orp_static01.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.lab_1c_rsp_static01.id
+  }
+---
+Changed to
+
+  ordered_cache_behavior {
+    path_pattern           = "/static/*"
+    target_origin_id       = "${var.project_name}-alb-origin01"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id            = aws_cloudfront_cache_policy.lab_1c_cache_static01.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.lab_1c_orp_static01.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.lab_1c_rsp_static01.id
+  }
+Why origin-driven caching is safer for APIs:
+
+"Origin-driven caching is safer for APIs because it shifts the authority of data sensitivity to the application itself, rather than relying on a static, broad-brush configuration at the CDN level. By using headers like Cache-Control: private, no-store on sensitive endpoints (such as /api/list) and s-maxage on public ones (like /api/public-feed), the developer ensures that only non-sensitive data is ever stored in a shared cache. This 'granular' control prevents accidental data leaks where one user's private account information could be served to another user from a CloudFront Edge location.
+
+However, you would still disable caching entirely in environments where data is highly transactional and must be real-time (such as a stock trading platform or a banking ledger), or when the legal and compliance risks of a header misconfiguration far outweigh the performance benefits of a CDN."
+
+
+
+
+
+
+

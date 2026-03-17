@@ -1,0 +1,116 @@
+1) Prove EC2 is private (no public IP)
+  aws ec2 describe-instances \
+  --instance-ids i-0165d8043d08a3010 \
+  --query "Reservations[].Instances[].PublicIpAddress"
+
+
+---
+morris@Mamba:~$ aws ec2 describe-instances \
+  --instance-ids i-0838443518cec15d1 \
+  --query "Reservations[].Instances[].PublicIpAddress"
+[]
+morris@Mamba:~$ 
+
+---
+no-public-ip.png
+---
+
+2) Prove VPC endpoints exist
+  aws ec2 describe-vpc-endpoints \
+  --filters "Name=vpc-id,Values=vpc-0997215d962d1693b" \
+  --query "VpcEndpoints[].ServiceName"
+
+
+
+aws ec2 describe-vpc-endpoints \
+  --filters "Name=vpc-id,Values=vpc-071b3db64f769a6db" \
+  --query "VpcEndpoints[].ServiceName"
+
+---
+morris@Mamba:~$ aws ec2 describe-vpc-endpoints \
+  --filters "Name=vpc-id,Values=vpc-071b3db64f769a6db" \
+  --query "VpcEndpoints[].ServiceName"
+[
+    "com.amazonaws.ap-southeast-1.s3",
+    "com.amazonaws.ap-southeast-1.secretsmanager",
+    "com.amazonaws.ap-southeast-1.ec2messages",
+    "com.amazonaws.ap-southeast-1.ssmmessages",
+    "com.amazonaws.ap-southeast-1.ssm",
+    "com.amazonaws.ap-southeast-1.logs"
+]
+---
+prove-ec2-endpoints-exist.png
+
+---
+3) Prove Session Manager path works (no SSH)
+
+aws ssm describe-instance-information \
+  --query "InstanceInformationList[].InstanceId"
+
+---
+morris@Mamba:~$ aws ssm describe-instance-information \
+  --query "InstanceInformationList[].InstanceId"
+[
+    "i-0165d8043d08a3010"
+]
+
+---
+prove-ssm-path-exists.png
+---
+4) Prove the instance can read both config stores
+
+
+aws ssm get-parameter --name /lab/db/endpoint
+---
+morris@Mamba:~$ aws ssm get-parameter --name /lab/db/endpoint
+{
+    "Parameter": {
+        "Name": "/lab/db/endpoint",
+        "Type": "String",
+        "Value": "lab-1c-rds01.cjg8uyu4czvg.ap-southeast-1.rds.amazonaws.com",
+        "Version": 1,
+        "LastModifiedDate": "2026-02-22T09:55:03.544000-08:00",
+        "ARN": "arn:aws:ssm:ap-southeast-1:880420038324:parameter/lab/db/endpoint",
+        "DataType": "text"
+    }
+}
+---
+get-param-ednpoint.png
+---
+
+
+aws secretsmanager get-secret-value --secret-id lab-1c/rds/mysql_v10
+
+---
+morris@Mamba:~$ aws secretsmanager get-secret-value --secret-id lab-1c/rds/mysql_v10
+{
+    "ARN": "arn:aws:secretsmanager:ap-southeast-1:880420038324:secret:lab-1c/rds/mysql_v10-w2uVvW",
+    "Name": "lab-1c/rds/mysql_v10",
+    "VersionId": "terraform-20260222175502879600000007",
+    "SecretString": "{\"dbname\":\"labdb\",\"host\":\"lab-1c-rds01.cjg8uyu4czvg.ap-southeast-1.rds.amazonaws.com\",\"password\":\"armageddon-blows-6-7\",\"port\":3306,\"username\":\"admin\"}",
+    "VersionStages": [
+        "AWSCURRENT"
+    ],
+    "CreatedDate": "2026-02-22T09:55:03.635000-08:00"
+}
+---
+get-secret-value.png
+--
+
+5) Prove CloudWatch logs delivery path is available via endpoint
+
+  aws logs describe-log-streams \
+    --log-group-name /aws/ec2/lab-1c-rds-app
+
+---
+morris@Mamba:~$ aws logs describe-log-streams \
+    --log-group-name /aws/ec2/lab-1c-rds-app
+{
+    "logStreams": []
+}
+---
+prove-cw-logs-path.png
+---
+
+
+
