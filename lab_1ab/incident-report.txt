@@ -1,0 +1,59 @@
+############################
+Company X Incident Report  #
+############################
+
+##################
+Incident Summary #
+##################
+
+Incident ID: 12345Xyz
+Incident Date: January 29th 
+Incident Time: 2:30am PST
+
+###################
+Incident Overview #
+###################
+
+Users complained of their inability to connect to the database. They kept receiving an "Internal Server Error"
+On-call tech verified alarm via CLI. See below
+
+morris@Mamba:~$ aws cloudwatch describe-alarms \
+      --alarm-names lab1c-db-connection-failure \
+      --query "MetricAlarms[].StateValue"
+[
+    "ALARM"
+
+#################
+Impact Analysis #
+#################
+
+System Impacted: RDS Database, notes entry app
+Downtime for data entry personnel estimated downtime: 20 mins.
+
+
+################################
+Detection and Response Activity#
+################################
+
+Incident was reported to on-call technician via email from SNS. Incident status was verified by checking CloudWatch Fault Logs.
+
+After checking logs, on-call technician observed credential drift. 
+
+Credentials were re-applied and no system had to be disabled, restarted or rebuilt for correction.
+
+
+#######################
+Recovery Verification #
+#######################
+
+
+On-call tech executed the curl command to verify his ability to connect to the database using the proper credentials. (see below)
+curl -s http://43.208.5.95/init
+
+morris@Mamba:~$ curl -s http://43.208.5.95/list
+<h3>Notes</h3><ul><li>5: lab_1c_is_a_success</li><li>4: lab_1c_is_a_success</li><li>3: this_is_200k_work</li><li>2: brazil_colombia_capeverde</li><li>1: blue_book_gentlemen</li></ul>
+
+He also later communicated with data entry staff to confirm that they were then able to re-connect and enter data normally
+
+
+

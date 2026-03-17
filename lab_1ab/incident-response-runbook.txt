@@ -1,0 +1,168 @@
+Lab 1C Incident Respoonse
+  1. SNS Alert Channel
+    SNS Topic
+    Name: lab-db-incidents
+    aws sns create-topic --name lab-db-incidents
+    Email Subscription (PagerDuty Simulation)
+
+          aws sns subscribe \
+            --topic-arn arn:aws:sns:ap-southeast-7:880420038324:lab1c-db-incidents\
+            --protocol email \
+            --notification-endpoint snailstampede+awsconsole@gmail.com
+
+----
+
+morris@Mamba:~$ aws sns subscribe \
+            --topic-arn arn:aws:sns:ap-southeast-7:880420038324:lab1c-db-incidents\
+            --protocol email \
+            --notification-endpoint snailstampede+awsconsole@gmail.com
+{
+    "SubscriptionArn": "pending confirmation"
+}
+---
+
+2. CloudWatch Alarm → SNS
+Alarm Concept
+Trigger when:
+  DB connection errors ≥ 3 in 5 minutes
+Alarm Creation (example)
+
+        aws cloudwatch put-metric-alarm \
+          --alarm-name lab1c-db-connection-failure \
+          --metric-name DBConnectionErrors \
+          --namespace Lab/RDSApp \
+          --statistic Sum \
+          --period 300 \
+          --threshold 3 \
+          --comparison-operator GreaterThanOrEqualToThreshold \
+          --evaluation-periods 1 \
+          --alarm-actions arn:aws:sns:ap-southeast-7:880420038324:lab1c-db-incidents
+
+RUNBOOK SECTION 1 — Acknowledge
+1.1 Confirm Alert
+
+  aws cloudwatch describe-alarms \
+  --alarm-names lab1c-db-connection-failure \
+  --query "MetricAlarms[].StateValue"
+
+---
+
+morris@Mamba:~$ aws cloudwatch describe-alarms \
+      --alarm-names lab1c-db-connection-failure \
+      --query "MetricAlarms[].StateValue"
+[
+    "ALARM"
+]
+
+---
+
+
+aws logs filter-log-events \
+      --log-group-name /aws/ec2/lab1c-rds-app \
+      --filter-pattern "ERROR"
+
+
+RUNBOOK SECTION 3 — Validate Configuration Sources
+
+3.1 Retrieve Parameter Store Values
+    
+      aws ssm get-parameters \
+        --names /lab/db/endpoint /lab/db/port /lab/db/name \
+        --with-decryption
+
+morris@Mamba:~$ aws ssm get-parameters \
+        --names /lab/db/endpoint /lab/db/port /lab/db/name \
+        --with-decryption
+---
+               
+{
+    "Parameters": [
+        {
+            "Name": "/lab/db/endpoint",
+            "Type": "String",
+            "Value": "lab1c-rds.c1scsu4609mp.ap-southeast-7.rds.amazonaws.com",
+            "Version": 1,
+            "LastModifiedDate": "2026-02-07T19:30:27.056000-08:00",
+            "ARN": "arn:aws:ssm:ap-southeast-7:880420038324:parameter/lab/db/endpoint",
+            "DataType": "text"
+        },
+        {
+            "Name": "/lab/db/name",
+            "Type": "String",
+            "Value": "lab1c_db",
+            "Version": 1,
+            "LastModifiedDate": "2026-02-07T19:24:43.977000-08:00",
+            "ARN": "arn:aws:ssm:ap-southeast-7:880420038324:parameter/lab/db/name",
+            "DataType": "text"
+        },
+        {
+            "Name": "/lab/db/port",
+            "Type": "String",
+            "Value": "3306",
+            "Version": 1,
+            "LastModifiedDate": "2026-02-07T19:30:27.048000-08:00",
+            "ARN": "arn:aws:ssm:ap-southeast-7:880420038324:parameter/lab/db/port",
+            "DataType": "text"
+        }
+    ],
+    "InvalidParameters": []
+}
+
+---
+
+3.2 Retrieve Secrets Manager Values
+
+aws secretsmanager get-secret-value \
+      --secret-id lab1c/rds/mysql_v15
+  
+
+morris@Mamba:~$ aws secretsmanager get-secret-value \
+      --secret-id lab1c/rds/mysql_v15
+{
+    "ARN": "arn:aws:secretsmanager:ap-southeast-7:880420038324:secret:lab1c/rds/mysql_v15-kAFeCU",
+    "Name": "lab1c/rds/mysql_v15",
+    "VersionId": "terraform-20260208033026291500000006",
+    "SecretString": "{\"dbname\":\"lab1c_db\",\"host\":\"lab1c-rds.c1scsu4609mp.ap-southeast-7.rds.amazonaws.com\",\"password\":\"armageddon-blows-6-7\",\"port\":3306,\"username\":\"admin\"}",
+    "VersionStages": [
+        "AWSCURRENT"
+    ],
+    "CreatedDate": "2026-02-07T19:30:26.956000-08:00"
+}
+
+---
+
+aws cloudwatch describe-alarms \
+      --alarm-names lab1c-db-connection-failure \
+      --query "MetricAlarms[].StateValue"
+
+----
+
+morris@Mamba:~$ aws cloudwatch describe-alarms \
+      --alarm-names lab1c-db-log-errors \
+      --query "MetricAlarms[].StateValue"
+[
+    "OK"
+]
+
+---
+
+
+aws logs filter-log-events \
+      --log-group-name /aws/ec2/lab1c-rds-app \
+      --filter-pattern "ERROR"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

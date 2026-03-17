@@ -1,0 +1,31 @@
+# Armageddon Network Configuration
+
+
+Region:                         ap-southeast-7 (Thailand)
+VPC Name:                       lab-1a-vpc
+VPC CIDR:                       10.249.0.0/16
+
+### Public Subnets###
+
+- ap-southeast-7a               10.249.1.0/24
+- ap-southeast-7b               10.249.2.0/24
+- ap-southeast-7c               10.249.3.0/24
+
+---
+
+### Private Subnets###
+
+ap-southeast-7a                 10.249.11.0/24
+ap-southeast-7b                 10.249.12.0/24
+ap-southeast-7c                 10.249.13.0/24
+
+
+### Database ###
+RDS Instance Identifier:        lab-mysql
+DB Username:                    admin
+DB Password:                    armageddon-blows-6-7
+
+### Secrets Manager ###
+
+Secrets Manager Secret Name:    lab1a-rds-mysql
+Secret ID for Applicaiton:      lab1a-rds-mysql

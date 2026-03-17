@@ -1,0 +1,65 @@
+
+============
+
+aws_db_instance.lab1c_rds: Still creating... [02m00s elapsed]
+aws_nat_gateway.lab1c_nat: Still creating... [02m00s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [02m10s elapsed]
+aws_nat_gateway.lab1c_nat: Creation complete after 2m8s [id=nat-0527ad8c3a4297c9d]
+aws_route.lab1c_private_default_route: Creating...
+aws_route.lab1c_private_default_route: Creation complete after 1s [id=r-rtb-049dcb75f020d766a1080289494]
+aws_db_instance.lab1c_rds: Still creating... [02m20s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [02m30s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [02m40s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [02m50s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [03m00s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [03m10s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [03m20s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [03m30s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [03m40s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [03m50s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [04m00s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [04m10s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [04m20s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [04m30s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [04m40s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [04m50s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [05m00s elapsed]
+aws_db_instance.lab1c_rds: Still creating... [05m10s elapsed]
+aws_db_instance.lab1c_rds: Creation complete after 5m20s [id=db-XOP4Y4TNZKUVC2STUJ5BBU5N5Q]
+aws_secretsmanager_secret_version.lab1c_db_secret_version01: Creating...
+aws_ssm_parameter.lab1c_db_port_param: Creating...
+aws_ssm_parameter.lab1c_db_endpoint_param: Creating...
+aws_secretsmanager_secret_version.lab1c_db_secret_version01: Creation complete after 2s [id=arn:aws:secretsmanager:ap-southeast-7:880420038324:secret:lab1c/rds/mysql_v15-kAFeCU|terraform-20260208033026291500000006]
+aws_ssm_parameter.lab1c_db_port_param: Creation complete after 2s [id=/lab/db/port]
+aws_ssm_parameter.lab1c_db_endpoint_param: Creation complete after 2s [id=/lab/db/endpoint]
+
+Apply complete! Resources: 39 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+application_urls = <<EOT
+Home:           http://43.208.5.95/
+Initialize DB:  http://43.208.5.95/init
+1st note (GET): http://43.208.5.95/add?note=first_note
+2nd note (GET)  http://43.208.5.95/add?note=blue_book_gentlemen
+3rd note (GET)  http://43.208.5.95/add?note=brazil_colombia_capeverde
+4th note (GET)  http://43.208.5.95/add?note=this_is_200k_work
+5th note (GET)  http://43.208.5.95/add?note=lab_1c_is_a_success
+List notes:     http://43.208.5.95/list
+
+EOT
+lab1c_ec2_instance_id = "i-0a17314cdf837cc7e"
+lab1c_log_group_name = "/aws/ec2/lab1c-rds-app"
+lab1c_private_subnet_ids = [
+  "subnet-0625d0d0fd8e7f19a",
+  "subnet-079a1713322808f11",
+  "subnet-002fea4e67f869fde",
+]
+lab1c_public_subnet_ids = [
+  "subnet-002e4f14f5bcc1375",
+  "subnet-007eef612d2c7967d",
+  "subnet-041b878e890501e96",
+]
+lab1c_rds_endpoint = "lab1c-rds.c1scsu4609mp.ap-southeast-7.rds.amazonaws.com"
+lab1c_sns_topic_arn = "arn:aws:sns:ap-southeast-7:880420038324:lab1c-db-incidents"
+lab1c_vpc_id = "vpc-09c58f719ea8dbfee"
