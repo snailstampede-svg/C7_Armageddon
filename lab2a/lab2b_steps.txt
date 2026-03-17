@@ -1,0 +1,237 @@
+1) Cache policy for static content (aggressive)
+# lab2b_cache_correctness.tf
+AWS warns that caching based on “high-cardinality headers” (like User-Agent) is usually a bad idea because it explodes variations.
+
+###
+Added- resource "aws_cloudfront_cache_policy" "lab_1c_cache_static01" to line 65-90 of cloudfront_alb.tf
+###
+
+
+2) Cache policy for API (safe default: caching disabled)
+# lab2b_cache_correctness.tf
+
+added resource "aws_cloudfront_cache_policy" "lab_1c_cache_api_disabled01" to line 91-121 of cloudfront_alb.tf
+
+###
+3) Origin request policy for API (forward what origin needs)
+# lab2b_cache_correctness.tf
+Terraform’s resource matches this concept directly.
+###
+
+added resource "aws_cloudfront_origin_request_policy" "lab_1c_orp_api01" to cloudfront_alb.tf line 128-141
+
+####
+4) Origin request policy for static (minimal)
+# lab2b_cache_correctness.tf
+###
+added resource "aws_cloudfront_origin_request_policy" "lab_1c_orp_static01" to line 148-155 in cloudfront_alb.tf
+###
+5) Response headers policy (optional but nice)
+    Terraform supports response header policies. 
+    CloudFront recommends using Cache-Control max-age over Expires.
+# lab2b_cache_correctness.tf
+
+###
+added resource "aws_cloudfront_response_headers_policy" "lab_1c_rsp_static01" to line 162-173 to cloudfront_alb.tf
+
+###
+
+6) Patch your CloudFront distribution behaviors
+    You’ll modify aws_cloudfront_distribution.chewbacca_cf01:
+
+A) Default behavior (treat as API-safe default)
+    Use chewbacca_cache_api_disabled01
+    Use chewbacca_orp_api01
+###
+
+edited default_cache_behavior 
+from:
+###
+  default_cache_behavior {
+    target_origin_id       = "${var.project_name}-alb-origin01"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods  = ["GET", "HEAD"]
+
+    # TODO: students choose cache policy / origin request policy for their app type
+    
+###
+to :
+
+default_cache_behavior {
+  target_origin_id       = "${var.project_name}-alb-origin01"
+  viewer_protocol_policy = "redirect-to-https"
+
+  allowed_methods = ["GET","HEAD","OPTIONS","PUT","POST","PATCH","DELETE"]
+  cached_methods  = ["GET","HEAD"]
+
+  cache_policy_id          = aws_cloudfront_cache_policy.chewbacca_cache_api_disabled01.id
+  origin_request_policy_id = aws_cloudfront_origin_request_policy.chewbacca_orp_api01.id
+}
+###
+B) Ordered behavior for /static/*
+    Use chewbacca_cache_static01
+    Use chewbacca_orp_static01
+    Attach response headers policy
+
+###
+
+
+
+#####
+
+Error on apply - correction
+
+####
+
+│ Error: creating CloudFront Cache Policy (lab-1c-cache-api-disabled01): operation error CloudFront: CreateCachePolicy, https response error StatusCode: 400, RequestID: 4d2f01d9-6085-446e-8591-a5997e8ef55b, InvalidArgument: The parameter HeaderBehavior is invalid for policy with caching disabled.
+│ 
+│   with aws_cloudfront_cache_policy.lab_1c_cache_api_disabled01,
+│   on lab2_cloudfront_alb.tf line 117, in resource "aws_cloudfront_cache_policy" "lab_1c_cache_api_disabled01":
+│  117: resource "aws_cloudfront_cache_policy" "lab_1c_cache_api_disabled01" {
+
+### changed - header_behavior = "none" FROM "whitelist"
+
+#####
+ Error: creating CloudFront Origin Request Policy (lab-1c-orp-api01): operation error CloudFront: CreateOriginRequestPolicy, https response error StatusCode: 400, RequestID: 34601e7d-4d33-4ab7-8f37-e36c7322f101, InvalidArgument: The parameter Headers contains Authorization that is not allowed.
+│ 
+│   with aws_cloudfront_origin_request_policy.lab_1c_orp_api01,
+│   on lab2_cloudfront_alb.tf line 147, in resource "aws_cloudfront_origin_request_policy" "lab_1c_orp_api01":
+│  147: resource "aws_cloudfront_origin_request_policy" "lab_1c_orp_api01" {
+│ 
+###
+changed 
+headers {
+      items = ["Authorization", "Content-Type", "Origin", "Host"]
+to:
+ headers {
+      items = ["Content-Type", "Origin", "Host"]
+
+###
+╷
+│ Error: creating CloudFront Cache Policy (lab-1c-cache-api-disabled01): operation error CloudFront: CreateCachePolicy, https response error StatusCode: 400, RequestID: 4c140243-36e0-449b-a470-781d980afba8, InvalidArgument: The parameter Headers must be empty for provided HeaderBehavior value.
+│ 
+│   with aws_cloudfront_cache_policy.lab_1c_cache_api_disabled01,
+│   on lab2_cloudfront_alb.tf line 117, in resource "aws_cloudfront_cache_policy" "lab_1c_cache_api_disabled01":
+│  117: resource "aws_cloudfront_cache_policy" "lab_1c_cache_api_disabled01" {
+
+###
+headers {
+        items = ["Authorization", "Host"]
+
+to:
+ headers {
+      items = ["none"]
+
+###
+
+########################################
+################## Deliverables  #######
+########################################
+
+1) Static caching proof
+Run twice:
+  curl -I https://chewbacca-growl.com/static/example.txt
+  curl -I https://chewbacca-growl.com/static/example.txt
+
+Look for:
+  Cache-Control: public, max-age=... (from response headers policy)
+  Age: increases on subsequent requests (cached object indicator) 
+
+  If Age never appears/increases, caching isn’t working (or TTL is 0 / headers prevent caching).
+---
+
+morris@Mamba:~$ curl -I https://snailtek.click/static/example.txt
+HTTP/2 502 
+content-type: text/html
+content-length: 937
+date: Sun, 08 Mar 2026 23:58:56 GMT
+x-cache: Error from cloudfront
+via: 1.1 b17f8a118d57b4772c5ae067cb6b9686.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P10
+x-amz-cf-id: 6M1SwASgJ1UnrLx2q3hNrzV_J456H5N09GwbjiKGeh69iiTxg4cWmg==
+age: 1
+cache-control: public, max-age=86400, immutable
+
+morris@Mamba:~$ curl -I https://snailtek.click/static/example.txt
+HTTP/2 502 
+content-type: text/html
+content-length: 937
+date: Sun, 08 Mar 2026 23:58:56 GMT
+x-cache: Error from cloudfront
+via: 1.1 b17f8a118d57b4772c5ae067cb6b9686.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P10
+x-amz-cf-id: u4AQ3wtaYFC0aUNb1pQEP-uH174lzVGKCmpaU_Xr6XYsJocGrJlooA==
+age: 3
+cache-control: public, max-age=86400, immutable
+---
+static_cache_proof.jpg
+---
+2) API must NOT cache unsafe output
+Run twice:
+  curl -I https://chewbacca-growl.com/api/list
+  curl -I https://chewbacca-growl.com/api/list
+
+Expected for “safe default” API behavior:
+    Age should be absent or 0
+    Responses should reflect fresh origin behavior
+    If you add auth later, you must never allow one user to see another’s response
+
+curl -I https://snailtek.click/api/list
+---
+morris@Mamba:~$ curl -I https://snailtek.click/api/list
+HTTP/2 404 
+content-type: text/html; charset=utf-8
+content-length: 207
+date: Mon, 09 Mar 2026 00:08:48 GMT
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Error from cloudfront
+via: 1.1 1b3830d707f4ac60e56d5750ec483784.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P10
+x-amz-cf-id: ZaUS6w0my9RWMX5BXhrxrI5Lksk_5Jy0DohZkY6kwZjpin5QIgtJGQ==
+
+morris@Mamba:~$ curl -I https://snailtek.click/api/list
+HTTP/2 404 
+content-type: text/html; charset=utf-8
+content-length: 207
+date: Mon, 09 Mar 2026 00:08:50 GMT
+server: Werkzeug/3.1.6 Python/3.9.25
+x-cache: Error from cloudfront
+via: 1.1 1b3830d707f4ac60e56d5750ec483784.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P10
+x-amz-cf-id: 0OpnI90V_T7_B3hYmjdilqYQS5qREz0g0QjE0nu21F5ABinjdqNiYQ==
+---
+api_not_caching.jpg
+---
+
+3) Cache key sanity checks (query strings)
+Static should ignore query strings by default:
+  curl -I "https://chewbacca-growl.com/static/example.txt?v=1"
+  curl -I "https://chewbacca-growl.com/static/example.txt?v=2"
+Expected:
+both map to the same cached object (hit ratio stays high) because static cache policy ignores query strings (unless students intentionally change it)
+
+---
+curl -I "https://snailtek.click/static/example.txt?v=1"
+curl -I "https://snailtek.click/static/example.txt?v=2"
+
+---
+
+
+
+4) “Stale read after write” safety test
+  If your API supports writes:
+    POST a new row
+    Immediately GET /api/list
+    Ensure the new row appears
+      If it doesn’t, they accidentally cached a dynamic response.
+
+---
+Confirmed that the new entry was displayed in the new list
+
+5-1.jpg
+5-2.jpg
+---
+
+

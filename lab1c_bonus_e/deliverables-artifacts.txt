@@ -1,0 +1,655 @@
+1) ALB exists and is active
+   
+      aws elbv2 describe-load-balancers \
+        --names lab-1c-alb01 \
+        --query "LoadBalancers[0].State.Code"
+
+---
+morris@Mamba:~$ aws elbv2 describe-load-balancers \
+        --names lab-1c-alb01 \
+        --query "LoadBalancers[0].State.Code"
+"active"
+---
+1-active-albe-exists.png
+---
+3) HTTPS listener exists on 443
+   
+      aws elbv2 describe-listeners \
+        --load-balancer-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/ff9da28a43e1a8a4 \
+        --query "Listeners[].Port"
+---
+morris@Mamba:~$ aws elbv2 describe-listeners \
+        --load-balancer-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/ff9da28a43e1a8a4 \
+        --query "Listeners[].Port"
+[
+    80,
+    443
+]
+---
+2-https-listener-exists.png
+---
+4) Target is healthy
+   
+      aws elbv2 describe-target-health \
+        --target-group-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:targetgroup/lab-1c-tg01/91c69617aab3900c
+
+---
+
+morris@Mamba:~$ aws elbv2 describe-target-health \
+        --target-group-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:targetgroup/lab-1c-tg01/91c69617aab3900c
+{
+    "TargetHealthDescriptions": [
+        {
+            "Target": {
+                "Id": "i-08bff1d96788f5127",
+                "Port": 80
+            },
+            "HealthCheckPort": "80",
+            "TargetHealth": {
+                "State": "healthy"
+            },
+            "AdministrativeOverride": {
+                "State": "no_override",
+                "Reason": "AdministrativeOverride.NoOverride",
+                "Description": "No override is currently active on target"
+            }
+        }
+    ]
+}
+
+---
+4-target-healthy.png
+
+
+5) WAF attached
+
+aws wafv2 get-web-acl-for-resource \
+        --resource-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/ff9da28a43e1a8a4
+
+---
+morris@Mamba:~$ aws wafv2 get-web-acl-for-resource \
+        --resource-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/ff9da28a43e1a8a4
+{
+    "WebACL": {
+        "Name": "lab-1c-waf01",
+        "Id": "b50c7dc4-cab6-4e6a-9bd7-0d49e8d7aa27",
+        "ARN": "arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/b50c7dc4-cab6-4e6a-9bd7-0d49e8d7aa27",
+        "DefaultAction": {
+            "Allow": {}
+        },
+        "Description": "",
+        "Rules": [
+            {
+                "Name": "AWSManagedRulesCommonRuleSet",
+                "Priority": 1,
+                "Statement": {
+                    "ManagedRuleGroupStatement": {
+                        "VendorName": "AWS",
+                        "Name": "AWSManagedRulesCommonRuleSet"
+                    }
+                },
+                "OverrideAction": {
+                    "None": {}
+                },
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": "lab-1c-waf-common"
+                }
+            }
+        ],
+        "VisibilityConfig": {
+            "SampledRequestsEnabled": true,
+            "CloudWatchMetricsEnabled": true,
+            "MetricName": "lab-1c-waf01"
+        },
+        "Capacity": 700,
+        "ManagedByFirewallManager": false,
+        "LabelNamespace": "awswaf:491388423736:webacl:lab-1c-waf01:",
+        "RetrofittedByFirewallManager": false,
+        "OnSourceDDoSProtectionConfig": {
+            "ALBLowReputationMode": "ACTIVE_UNDER_DDOS"
+        }
+    }
+}
+
+
+---
+5-waf-attached.png
+---
+7) Alarm created (ALB 5xx)
+   
+      aws cloudwatch describe-alarms \
+        --alarm-name-prefix lab-1c-alb-5xx-alarm01
+
+---
+morris@Mamba:~$ aws cloudwatch describe-alarms \
+        --alarm-name-prefix lab-1c-alb-5xx-alarm01
+{
+    "MetricAlarms": [
+        {
+            "AlarmName": "lab-1c-alb-5xx-alarm01",
+            "AlarmArn": "arn:aws:cloudwatch:ap-southeast-1:491388423736:alarm:lab-1c-alb-5xx-alarm01",
+            "AlarmConfigurationUpdatedTimestamp": "2026-02-26T17:26:44.828000-08:00",
+            "ActionsEnabled": true,
+            "OKActions": [],
+            "AlarmActions": [
+                "arn:aws:sns:ap-southeast-1:491388423736:lab-1c-db-incidents"
+            ],
+            "InsufficientDataActions": [],
+            "StateValue": "INSUFFICIENT_DATA",
+            "StateReason": "Unchecked: Initial alarm creation",
+            "StateUpdatedTimestamp": "2026-02-26T17:26:44.828000-08:00",
+            "MetricName": "HTTPCode_ELB_5XX_Count",
+            "Namespace": "AWS/ApplicationELB",
+            "Statistic": "Sum",
+            "Dimensions": [
+                {
+                    "Name": "LoadBalancer",
+                    "Value": "app/lab-1c-alb01/ff9da28a43e1a8a4"
+                }
+            ],
+            "Period": 300,
+            "EvaluationPeriods": 1,
+            "Threshold": 10.0,
+            "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+            "TreatMissingData": "missing",
+            "StateTransitionedTimestamp": "2026-02-26T17:26:44.828000-08:00"
+        }
+    ],
+    "CompositeAlarms": []
+}
+---
+7-alarm-alb-created.png
+
+---
+
+
+aws cloudwatch list-dashboards \
+        --dashboard-name-prefix lab-1c
+
+---
+morris@Mamba:~$ aws cloudwatch list-dashboards \
+        --dashboard-name-prefix lab-1c
+{
+    "DashboardEntries": [
+        {
+            "DashboardName": "lab-1c-dashboard01",
+            "DashboardArn": "arn:aws:cloudwatch::491388423736:dashboard/lab-1c-dashboard01",
+            "LastModified": "2026-02-26T17:26:46-08:00",
+            "Size": 652
+        }
+    ]
+}
+---
+9-dashboard-exists.png
+
+---
+
+
+###########################
+BONUS-C Starts Here
+###########################
+
+1) Confirm hosted zone exists (if managed)
+  aws route53 list-hosted-zones-by-name \
+    --dns-name snailtek.click \
+    --query "HostedZones[].Id"
+---
+morris@Mamba:~$ aws route53 list-hosted-zones-by-name \
+    --dns-name snailtek.click \
+    --query "HostedZones[].Id"
+[
+    "/hostedzone/Z00788602O9J9BN7G1WOT"
+]
+---
+1-hosted-zone-exists.png
+
+---
+
+2) Confirm app record exists
+  aws route53 list-resource-record-sets \
+  --hosted-zone-id Z00788602O9J9BN7G1WOT \
+  --query "ResourceRecordSets[?Name=='app.snailtek.click.']"
+
+---
+morris@Mamba:~$ aws route53 list-resource-record-sets \
+  --hosted-zone-id Z00788602O9J9BN7G1WOT \
+  --query "ResourceRecordSets[?Name=='app.snailtek.click.']"
+[
+    {
+        "Name": "app.snailtek.click.",
+        "Type": "A",
+        "AliasTarget": {
+            "HostedZoneId": "Z1LMS91P8CMLE5",
+            "DNSName": "lab-1c-alb01-898914847.ap-southeast-1.elb.amazonaws.com.",
+            "EvaluateTargetHealth": true
+        }
+    }
+]
+
+---
+2-app-record-exists.png
+
+---
+3) Confirm certificate issued
+  aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:ap-southeast-1:491388423736:certificate/bbc58cbd-c994-4fac-9963-5b0993c5fd60 \
+  --query "Certificate.Status"
+---
+morris@Mamba:~$ aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:ap-southeast-1:491388423736:certificate/bbc58cbd-c994-4fac-9963-5b0993c5fd60 \
+  --query "Certificate.Status"
+"ISSUED"
+
+---
+3-cert-issued.png
+
+---
+4) Confirm HTTPS works
+  curl -I https://app.snailtek.click
+
+---
+morris@Mamba:~$ curl -I https://app.snailtek.click
+HTTP/2 200 
+date: Fri, 27 Feb 2026 13:15:03 GMT
+content-type: text/html; charset=utf-8
+content-length: 63
+server: Werkzeug/1.0.1 Python/3.9.25
+
+---
+4-https-works.png
+
+---
+
+
+######Important- changed s3 bucket policy to ALLOW. Will need to correct if this causes other errors.############
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.lab_1c_alb_logs_bucket01[0].arn,
+          "${aws_s3_bucket.lab_1c_alb_logs_bucket01[0].arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
+      {
+        Sid    = "AllowELBPutObject"
+        Effect = "Allow"
+        Principal = {
+         ## Service = "elasticloadbalancing.amazonaws.com"## THis line was removed and replaced with 
+This line## AWS = "arn:aws:iam::114774131450:root"##
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.lab_1c_alb_logs_bucket01[0].arn}/${var.alb_access_logs_prefix}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+      }
+
+###Made changes to policy to correct this error.
+
+│ Error: modifying ELBv2 Load Balancer (arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/27d909f9f6e15ecd) attributes: operation error Elastic Load Balancing v2: ModifyLoadBalancerAttributes, https response error StatusCode: 400, RequestID: bb6f05de-418e-4f3d-8cf1-d9c48db7d1db, InvalidConfigurationRequest: Access Denied for bucket: lab-1c-alb-logs-491388423736. Please check S3bucket permission
+│ 
+│   with aws_lb.lab_1c_alb01,
+│   on bonus_b.tf line 111, in resource "aws_lb" "lab_1c_alb01":
+│  111: resource "aws_lb" "lab_1c_alb01" {
+
+############Bonus -D Starts Here############
+
+1) Verify apex record exists
+  aws route53 list-resource-record-sets \
+    --hosted-zone-id Z00788602O9J9BN7G1WOT \
+    --query "ResourceRecordSets[?Name=='snailtek.click.']"
+
+---
+morris@Mamba:~$ aws route53 list-resource-record-sets \
+    --hosted-zone-id Z00788602O9J9BN7G1WOT \
+    --query "ResourceRecordSets[?Name=='snailtek.click.']"
+[
+    {
+        "Name": "snailtek.click.",
+        "Type": "A",
+        "AliasTarget": {
+            "HostedZoneId": "Z1LMS91P8CMLE5",
+            "DNSName": "lab-1c-alb01-863692732.ap-southeast-1.elb.amazonaws.com.",
+            "EvaluateTargetHealth": true
+        }
+    },
+    {
+        "Name": "snailtek.click.",
+        "Type": "NS",
+        "TTL": 172800,
+        "ResourceRecords": [
+            {
+                "Value": "ns-1546.awsdns-01.co.uk."
+            },
+            {
+                "Value": "ns-405.awsdns-50.com."
+            },
+            {
+                "Value": "ns-959.awsdns-55.net."
+            },
+            {
+                "Value": "ns-1245.awsdns-27.org."
+            }
+        ]
+    },
+    {
+        "Name": "snailtek.click.",
+        "Type": "SOA",
+        "TTL": 900,
+        "ResourceRecords": [
+            {
+                "Value": "ns-1546.awsdns-01.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"
+            }
+        ]
+    }
+]
+
+---
+
+
+1-apex-record-exists.png
+---
+2) Verify ALB logging is enabled
+
+aws elbv2 describe-load-balancers \
+    --names lab_1c-alb01 \
+    --query "LoadBalancers[0].LoadBalancerArn"
+
+aws elbv2 describe-load-balancer-attributes \
+  --load-balancer-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/39ae5ddc215d237a
+
+---
+morris@Mamba:~$ aws elbv2 describe-load-balancer-attributes   --load-balancer-arn arn:aws:elasticloadbalancing:ap-southeast-1:491388423736:loadbalancer/app/lab-1c-alb01/39ae5ddc215d237a
+{
+    "Attributes": [
+        {
+            "Key": "access_logs.s3.enabled",
+            "Value": "true"
+        },
+        {
+            "Key": "access_logs.s3.bucket",
+            "Value": "lab-1c-alb-logs-491388423736"
+        },
+        {
+            "Key": "access_logs.s3.prefix",
+            "Value": "alb-access-logs"
+        },
+        {
+            "Key": "health_check_logs.s3.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "health_check_logs.s3.bucket",
+            "Value": ""
+        },
+        {
+            "Key": "health_check_logs.s3.prefix",
+            "Value": ""
+        },
+        {
+            "Key": "idle_timeout.timeout_seconds",
+            "Value": "60"
+        },
+        {
+            "Key": "deletion_protection.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "routing.http2.enabled",
+            "Value": "true"
+        },
+        {
+            "Key": "routing.http.drop_invalid_header_fields.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "routing.http.xff_client_port.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "routing.http.preserve_host_header.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "routing.http.xff_header_processing.mode",
+            "Value": "append"
+        },
+        {
+            "Key": "load_balancing.cross_zone.enabled",
+            "Value": "true"
+        },
+        {
+            "Key": "routing.http.desync_mitigation_mode",
+            "Value": "defensive"
+        },
+        {
+            "Key": "client_keep_alive.seconds",
+            "Value": "3600"
+        },
+        {
+            "Key": "waf.fail_open.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "routing.http.x_amzn_tls_version_and_cipher_suite.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "zonal_shift.config.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "connection_logs.s3.enabled",
+            "Value": "false"
+        },
+        {
+            "Key": "connection_logs.s3.bucket",
+            "Value": ""
+        },
+        {
+            "Key": "connection_logs.s3.prefix",
+            "Value": ""
+        }
+    ]
+}
+(END)
+---
+2-verify-logging-enabled-1.png
+2-verify-logging-enabled-2.png
+
+---
+3) Generate some traffic
+curl -I https://snailtek.click
+curl -I https://app.snailtek.click
+
+---morris@Mamba:~$ curl -I https://snailtek.click
+HTTP/2 200 
+date: Fri, 27 Feb 2026 18:47:44 GMT
+content-type: text/html; charset=utf-8
+content-length: 63
+server: Werkzeug/1.0.1 Python/3.9.25
+
+morris@Mamba:~$ curl -I https://app.snailtek.click
+HTTP/2 200 
+date: Fri, 27 Feb 2026 18:47:57 GMT
+content-type: text/html; charset=utf-8
+content-length: 63
+server: Werkzeug/1.0.1 Python/3.9.25
+
+---
+3-gnerate-some-traffic.png
+
+---
+
+) Verify logs arrived in S3 (may take a few minutes)
+  aws s3 ls s3://<BUCKET_NAME>/<PREFIX>/AWSLogs/<ACCOUNT_ID>/elasticloadbalancing/ --recursive | head
+---
+
+morris@Mamba:~$ aws s3 ls s3://lab-1c-alb-logs-491388423736/alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ --recursive | head
+2026-02-27 07:50:08        455 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1550Z_47.131.22.221_1z8a81y6.log.gz
+2026-02-27 07:50:06        751 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1550Z_54.255.140.249_38isjmlv.log.gz
+2026-02-27 07:55:05        491 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1555Z_122.248.201.113_2z8mb1pb.log.gz
+2026-02-27 08:00:05       4882 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1600Z_122.248.201.113_5i69plvd.log.gz
+2026-02-27 08:00:08        433 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1600Z_47.131.22.221_2iv2xsei.log.gz
+2026-02-27 08:00:06       1579 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1600Z_54.255.140.249_25ylykqy.log.gz
+2026-02-27 08:05:05       3919 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1605Z_122.248.201.113_2z2yrb4a.log.gz
+2026-02-27 08:05:08        876 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1605Z_47.131.22.221_379gyfyn.log.gz
+2026-02-27 08:05:06        963 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1605Z_54.255.140.249_2jabpy7o.log.gz
+2026-02-27 08:10:05        307 alb-access-logs/AWSLogs/491388423736/elasticloadbalancing/ap-southeast-1/2026/02/27/491388423736_elasticloadbalancing_ap-southeast-1_app.lab-1c-alb01.39ae5ddc215d237a_20260227T1610Z_122.248.201.113_3p0ngvnd.log.gz
+
+[Errno 32] Broken pipe
+Exception ignored on flushing sys.stdout:
+BrokenPipeError: [Errno 32] Broken pipe
+---
+4-verify-logs-arrived.png
+
+----
+################# Bonus E Starts Here ############
+
+4) Student verification (CLI)
+
+A Confirm WAF logging is enabled (authoritative)
+
+  aws wafv2 get-logging-configuration \
+    --resource-arn arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/d6400555-4647-4b3d-9255-443296bff874
+
+---
+morris@Mamba:~$ aws wafv2 get-logging-configuration \
+    --resource-arn arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/d6400555-4647-4b3d-9255-443296bff874
+{
+    "LoggingConfiguration": {
+        "ResourceArn": "arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/d6400555-4647-4b3d-9255-443296bff874",
+        "LogDestinationConfigs": [
+            "arn:aws:logs:ap-southeast-1:491388423736:log-group:aws-waf-logs-lab-1c-webacl01"
+        ],
+        "ManagedByFirewallManager": false,
+        "LogType": "WAF_LOGS",
+        "LogScope": "CUSTOMER"
+    }
+}
+
+---
+4a-confirm-waf-logging-enabled.png
+---
+B) Generate traffic (hits + blocks)
+
+curl -I https://snailtek.click
+curl -I https://app.snailtek.click
+
+---
+morris@Mamba:~$ curl -I https://snailtek.click
+HTTP/2 200 
+date: Sat, 28 Feb 2026 05:16:04 GMT
+content-type: text/html; charset=utf-8
+content-length: 63
+server: Werkzeug/1.0.1 Python/3.9.25
+
+morris@Mamba:~$ curl -I https://app.snailtek.click
+HTTP/2 200 
+date: Sat, 28 Feb 2026 05:16:19 GMT
+content-type: text/html; charset=utf-8
+content-length: 63
+server: Werkzeug/1.0.1 Python/3.9.25
+---
+4b-gnerate-traffic.png
+---
+C1) If CloudWatch Logs destination
+
+aws logs describe-log-streams \
+  --log-group-name aws-waf-logs-lab-1c-webacl01 \
+  --order-by LastEventTime --descending
+---
+morris@Mamba:~$ aws logs describe-log-streams \
+  --log-group-name aws-waf-logs-lab-1c-webacl01 \
+  --order-by LastEventTime --descending
+{
+    "logStreams": [
+        {
+            "logStreamName": "ap-southeast-1_lab-1c-waf01_0",
+            "creationTime": 1772492771546,
+            "firstEventTimestamp": 1772492755512,
+            "lastEventTimestamp": 1772492755512,
+            "lastIngestionTime": 1772492771603,
+            "uploadSequenceToken": "49039859663755457808573461128238135562730058050356738958",
+            "arn": "arn:aws:logs:ap-southeast-1:491388423736:log-group:aws-waf-logs-lab-1c-webacl01:log-stream:ap-southeast-1_lab-1c-waf01_0",
+            "storedBytes": 0
+        }
+    ]
+}
+
+---
+Then pull recent events:
+
+morris@Mamba:~$ aws logs filter-log-events \
+  --log-group-name aws-waf-logs-lab-1c-webacl01 \
+  --max-items 20
+{
+    "events": [
+        {
+            "logStreamName": "ap-southeast-1_lab-1c-waf01_0",
+            "timestamp": 1772492755512,
+            "message": "{\"timestamp\":1772492755512,\"formatVersion\":1,\"webaclId\":\"arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/d6400555-4647-4b3d-9255-443296bff874\",\"terminatingRuleId\":\"Default_Action\",\"terminatingRuleType\":\"REGULAR\",\"action\":\"ALLOW\",\"terminatingRuleMatchDetails\":[],\"httpSourceName\":\"ALB\",\"httpSourceId\":\"491388423736-app/lab-1c-alb01/0c3575f1d9bc4da0\",\"ruleGroupList\":[{\"ruleGroupId\":\"AWS#AWSManagedRulesCommonRuleSet\",\"terminatingRule\":null,\"nonTerminatingMatchingRules\":[],\"excludedRules\":null,\"customerConfig\":null}],\"rateBasedRuleList\":[],\"nonTerminatingMatchingRules\":[],\"requestHeadersInserted\":null,\"responseCodeSent\":null,\"httpRequest\":{\"clientIp\":\"176.65.148.161\",\"country\":\"NL\",\"headers\":[{\"name\":\"Host\",\"value\":\"snailtek.click\"},{\"name\":\"User-Agent\",\"value\":\"Mozilla/5.0 (compatible; Let's Encrypt validation server; +https://www.letsencrypt.org)\"},{\"name\":\"Accept\",\"value\":\"*/*\"}],\"uri\":\"/\",\"args\":\"\",\"httpVersion\":\"HTTP/1.1\",\"httpMethod\":\"HEAD\",\"requestId\":\"1-69a617d3-76acb6ee10a539d552d6b50d\",\"fragment\":\"\",\"scheme\":\"http\",\"host\":\"snailtek.click\"}}",
+            "ingestionTime": 1772492771603,
+            "eventId": "39527909306914547707797891537128222556646144992153370624"
+        },
+        {
+            "logStreamName": "ap-southeast-1_lab-1c-waf01_0",
+            "timestamp": 1772492757667,
+            "message": "{\"timestamp\":1772492757667,\"formatVersion\":1,\"webaclId\":\"arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/d6400555-4647-4b3d-9255-443296bff874\",\"terminatingRuleId\":\"Default_Action\",\"terminatingRuleType\":\"REGULAR\",\"action\":\"ALLOW\",\"terminatingRuleMatchDetails\":[],\"httpSourceName\":\"ALB\",\"httpSourceId\":\"491388423736-app/lab-1c-alb01/0c3575f1d9bc4da0\",\"ruleGroupList\":[{\"ruleGroupId\":\"AWS#AWSManagedRulesCommonRuleSet\",\"terminatingRule\":null,\"nonTerminatingMatchingRules\":[],\"excludedRules\":null,\"customerConfig\":null}],\"rateBasedRuleList\":[],\"nonTerminatingMatchingRules\":[],\"requestHeadersInserted\":null,\"responseCodeSent\":null,\"httpRequest\":{\"clientIp\":\"176.65.148.161\",\"country\":\"NL\",\"headers\":[{\"name\":\"Host\",\"value\":\"snailtek.click\"},{\"name\":\"User-Agent\",\"value\":\"Mozilla/5.0 (compatible; Let's Encrypt validation server; +https://www.letsencrypt.org)\"},{\"name\":\"Accept\",\"value\":\"*/*\"}],\"uri\":\"/\",\"args\":\"\",\"httpVersion\":\"HTTP/1.1\",\"httpMethod\":\"HEAD\",\"requestId\":\"1-69a617d5-6c555461681eea575d8004ed\",\"fragment\":\"\",\"scheme\":\"http\",\"host\":\"snailtek.click\"}}",
+            "ingestionTime": 1772492779430,
+            "eventId": "39527909354972653610631384416599586379436243737126240256"
+        },
+        {
+            "logStreamName": "ap-southeast-1_lab-1c-waf01_0",
+            "timestamp": 1772492776689,
+            "message": "{\"timestamp\":1772492776689,\"formatVersion\":1,\"webaclId\":\"arn:aws:wafv2:ap-southeast-1:491388423736:regional/webacl/lab-1c-waf01/d6400555-4647-4b3d-9255-443296bff874\",\"terminatingRuleId\":\"Default_Action\",\"terminatingRuleType\":\"REGULAR\",\"action\":\"ALLOW\",\"terminatingRuleMatchDetails\":[],\"httpSourceName\":\"ALB\",\"httpSourceId\":\:
+
+
+---
+C1-recent-events.png
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
