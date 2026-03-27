@@ -12,7 +12,7 @@ resource "aws_security_group" "liberdade_ec2_sg" {
     cidr_blocks = ["10.249.0.0/20"] # Tokyo VPC CIDR
   }
 
-  # 2. Allow HTTPS for SSM (needed for you to log in)
+ 
   egress {
     description = "Allow SSM for management"
     from_port   = 443
