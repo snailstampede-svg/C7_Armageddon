@@ -12,7 +12,27 @@
 # List notes:     http://${aws_instance.shinjuku_ec201.public_ip}/list
 # EOT
 # }
+# The "Signpost" for São Paulo's Route Table
 
+# output "tokyo_vpc_cidr" {
+#   value       = "10.249.0.0/20" 
+#   description = "The CIDR block for Shinjuku VPC so Liberdade knows where to route traffic."
+# }
+# 
+output "tokyo_to_sp_peering_id" {
+  value = aws_ec2_transit_gateway_peering_attachment.shinjuku_to_liberdade_peer01.id
+}
+# The "Corridor ID" for Peering
+output "tokyo_tgw_id" {
+  value       = aws_ec2_transit_gateway.shinjuku_tgw01.id
+  description = "The Transit Gateway ID in Tokyo used to initiate the peering request."
+}
+output "tokyo_vpc_cidr" {
+  value = aws_vpc.shinjuku_vpc01.cidr_block
+}
+output "shinjuku_rds_endpoint" {
+  value = aws_db_instance.lab1crds.address
+}
 output "shinjuku_vpc_id" {
   value = aws_vpc.shinjuku_vpc01.id
 }
@@ -27,10 +47,6 @@ output "shinjuku_private_subnet_ids" {
 
 output "shinjuku_ec2_instance_id" {
   value = aws_instance.shinjuku_ec201.id
-}
-
-output "shinjuku_rds_endpoint" {
-  value = aws_db_instance.lab1crds.address
 }
 
 output "shinjuku_sns_topic_arn" {

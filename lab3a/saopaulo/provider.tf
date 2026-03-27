@@ -12,10 +12,3 @@ terraform {
 provider "aws" {
   region = "sa-east-1"
 }
-
-# Alias: This is strictly for the TGW Peering Accepter 
-# to talk to the Tokyo Hub
-provider "aws" {
-  alias  = "tokyo_hub"
-  region = "ap-northeast-1"
-}

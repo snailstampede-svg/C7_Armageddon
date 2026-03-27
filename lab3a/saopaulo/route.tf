@@ -14,9 +14,9 @@ resource "aws_route_table_association" "liberdade_private_assoc" {
   route_table_id = aws_route_table.liberdade_private_rt.id
 }
 
-
+# This is how SP finds Tokyo
 resource "aws_route" "liberdade_to_shinjuku" {
   route_table_id         = aws_route_table.liberdade_private_rt.id
-  destination_cidr_block = "10.249.0.0/20" # Tokyo CIDR
+  destination_cidr_block = "10.249.0.0/20"
   transit_gateway_id     = aws_ec2_transit_gateway.liberdade_tgw01.id
 }

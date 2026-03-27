@@ -9,10 +9,10 @@ locals {
 
 
 
+
 #########################
 # Route53 Data Lookup   #
 #########################
-
 # This searches for the existing zone instead of creating a new one
 data "aws_route53_zone" "snailtek" {
   name         = "snailtek.click"

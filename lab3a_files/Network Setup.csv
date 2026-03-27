@@ -1,0 +1,36 @@
+Region,Designation,VPC CIDR,Subnet Breakdown,Availability Zones
+Tokyo,Hub (shinjuku),10.249.0.0/20,Public: 10.249.0.0/24Private: 10.249.1.0/24TGW: 10.249.15.240/28,ap-northeast-1a
+,,,,ap-northeast-1c
+,,,,ap-northeast-1d
+,,,,
+São Paulo,Spoke (liberdade),10.249.16.0/21,Public: 10.249.16.0/24Private: 10.249.17.0/24TGW: 10.249.23.240/28,sa-east-1a
+,,,,sa-east-1b
+,,,,sa-east-1c
+,,,,
+,,,,
+,,,,
+,,,,
+Japan Region- CIDR,,,,
+,,,,
+Subnet Name,CIDR Block,Purpose,,
+,,,,
+shinjuku-public-1a,10.249.1.0/24,ALB / NAT Gateway,,
+shinjuku-public-1c,10.249.2.0/24,ALB / NAT Gateway,,
+shinjuku-public-1d,10.249.3.0/24,ALB / NAT Gateway,,
+,,,,
+shinjuku-private-1a,10.249.11.0/24,EC2 App / RDS,,
+shinjuku-private-1c,10.249.12.0/24,EC2 App / RDS,,
+shinjuku-private-1d,10.249.13.0/24,EC2 App / RDS,,
+,,,,
+,,,,
+Brazil Region- CIDR,,,,
+,,,,
+Subnet Name,CIDR Block,Purpose,,
+,,,,
+liberdade-public-1a,10.249.16.0/24,Public ALB,,
+liberdade-public-1b,10.249.17.0/24,Public ALB,,
+liberdade-public-1c,10.249.18.0/24,Public ALB,,
+,,,,
+liberdade-private-1a,10.249.19.0/24,Stateless EC2,,
+liberdade-private-1b,10.249.20.0/24,Stateless EC2,,
+liberdade-private-1c,10.249.21.0/24,Stateless EC2,,

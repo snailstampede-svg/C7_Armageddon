@@ -1,0 +1,4 @@
+This still needs to be corrected:
+
+1. Route 53 Records: The A records pointing to CloudFront.
+

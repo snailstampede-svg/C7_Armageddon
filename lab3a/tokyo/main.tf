@@ -171,13 +171,32 @@ resource "aws_security_group" "shinjuku_rds_sg01" {
     protocol        = "tcp"
     security_groups = [aws_security_group.shinjuku_ec2_sg01.id]
   }
-  egress {
+
+    egress {
     description = "Outbound responses from RDS"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
 
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_liberdade_to_shinjuku_rds" {
+  # This must match the resource name from your previous lab
+  security_group_id = aws_security_group.shinjuku_rds_sg01.id 
+  
+  description = "Allow MySQL 3306 from Sao Paulo (Liberdade) VPC CIDR"
+  from_port   = 3306
+  to_port     = 3306
+  ip_protocol = "tcp"
+  
+  # The "Engineering Truth": Security Group IDs don't work over TGW Peering.
+  # We MUST use the specific CIDR of the Liberdade VPC.
+  cidr_ipv4   = "10.249.16.0/21" 
+
+  tags = {
+    Name = "allow-liberdade-to-shinjuku-rds"
   }
 }
 
