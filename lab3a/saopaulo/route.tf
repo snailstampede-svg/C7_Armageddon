@@ -1,4 +1,4 @@
-# Sao Paulo Route Table & Routes
+# Sao Paulo Route Table & Route
 resource "aws_route_table" "liberdade_private_rt" {
   vpc_id = aws_vpc.liberdade_vpc01.id
 

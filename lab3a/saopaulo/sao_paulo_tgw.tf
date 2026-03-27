@@ -12,7 +12,7 @@ resource "aws_ec2_transit_gateway_peering_attachment_accepter" "liberdade_accept
   tags = { Name = "liberdade-accept-peer01" }
 }
 
-# 3. VPC Attachment
+# 3. VPC Attachments
 resource "aws_ec2_transit_gateway_vpc_attachment" "liberdade_attach_sp_vpc01" {
   transit_gateway_id = aws_ec2_transit_gateway.liberdade_tgw01.id
   vpc_id             = aws_vpc.liberdade_vpc01.id
