@@ -1,4 +1,4 @@
-# This lets Sao Paulo "read" the Tokyo state file from S3
+# This lets SP "read" the Tokyo state file from S3
 data "terraform_remote_state" "tokyo" {
   backend = "s3"
 
